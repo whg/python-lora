@@ -27,7 +27,10 @@ class Lora:
         self.fifo_tx_base_addr = 0
         self.fifo_rx_base_addr = 0
         self.mode = 'STDBY'
-        
+
+    def connected(self):
+        return self.long_range_mode == 'LoRa'
+
     def reset(self):
         for l in range(2):
             pi.write(self.reset_pin, 0)
@@ -49,7 +52,7 @@ class Lora:
 
     def write_data(self, reg, data):
         self.xfer(reg, data)
-        
+
     def _get_setting(self, setting):
         if setting.num_bytes == 1:
             reg_value = self.read_reg(setting.reg)
@@ -58,11 +61,11 @@ class Lora:
             data = self.read_data(setting.reg, setting.num_bytes)
             v = int.from_bytes(data, 'big')
         return setting.decode(v)
-        
+
     def _write_setting(self, setting, value):
         v = setting.encode(value)
         self.settings_cache[setting.id()] = v
-        
+
         if setting.mask != 0xff:
             r = self.read_reg(setting.reg) & (setting.mask ^ 0xff)
             self.write_reg(setting.reg, r | v << setting.shift)
@@ -71,18 +74,18 @@ class Lora:
         elif setting.num_bytes > 1:
             vs = list(v.to_bytes(setting.num_bytes, 'big'))
             self.write_reg(setting.reg, vs)
-        
+
     def __getattr__(self, name):
         setting_class = settings.options.get(name)
         if setting_class:
             return self._get_setting(setting_class)
         return self.__dict__[name]
-        
+
     def __setattr__(self, name, value):
         setting_class = settings.options.get(name)
         if setting_class:
             return self._write_setting(setting_class, value)
-        
+
         self.__dict__[name] = value
 
     @property
@@ -101,7 +104,7 @@ class Lora:
     @property
     def rx_ready(self):
         return IrqFlags.RX_DONE in self.irq_flags
-        
+
     def read_rx(self):
         rx_addr = self.read_reg(regs.FIFO_RX_CURRENT_ADDR)
         self.fifo_add_ptr = rx_addr
@@ -116,7 +119,7 @@ class Lora:
         def callback(*args):
             data, rssi = self.read_rx()
             func(data, rssi)
-            
+
         pi.set_mode(pin, pigpio.INPUT)
         pi.callback(pin, pigpio.RISING_EDGE, callback)
 
@@ -155,4 +158,3 @@ if __name__ == '__main__':
     lora.on_rx(4, c)
     input()
     # print(lora.rx_ready, lora.read_rx())
-        
