@@ -23,17 +23,19 @@ class Lora:
         self.spi = SPI(spi_channel)
 
         self.settings_cache = {}
+        self.mode = 'SLEEP'
         self.long_range_mode = 'LoRa'
         self.fifo_tx_base_addr = 0
         self.fifo_rx_base_addr = 0
         self.mode = 'STDBY'
-
+        self.clear_irqs()
+        
     def connected(self):
         return self.long_range_mode == 'LoRa'
 
     def reset(self):
         for l in range(2):
-            pi.write(self.reset_pin, 0)
+            pi.write(self.reset_pin, l)
             time.sleep(0.001)
 
     def xfer(self, reg, data=[0]):
@@ -107,7 +109,7 @@ class Lora:
 
     def read_rx(self):
         rx_addr = self.read_reg(regs.FIFO_RX_CURRENT_ADDR)
-        self.fifo_add_ptr = rx_addr
+        self.fifo_addr_ptr = rx_addr
         self.ffadfasdf = 3
         n_bytes = self.read_reg(regs.RX_NB_BYTES)
         payload = self.read_data(regs.FIFO, n_bytes)
