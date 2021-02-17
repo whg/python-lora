@@ -14,6 +14,8 @@ class IrqFlags(IntFlag):
     RX_DONE = 64
     RX_TIMEOUT = 128
 
+WRITE_BIT = 0x80
+
 class Lora:
     def __init__(self, reset_pin, spi_channel=0):
         self.reset_pin = reset_pin
@@ -29,7 +31,7 @@ class Lora:
         self.fifo_rx_base_addr = 0
         self.mode = 'STDBY'
         self.clear_irqs()
-        
+
     def connected(self):
         return self.long_range_mode == 'LoRa'
 
@@ -47,13 +49,10 @@ class Lora:
         return self.xfer(reg)[1]
 
     def write_reg(self, reg, value):
-        self.xfer(reg | 0x80, value)
+        self.xfer(reg | WRITE_BIT, value)
 
     def read_data(self, reg, n):
         return self.xfer(reg, [0] * n)[1:]
-
-    def write_data(self, reg, data):
-        self.xfer(reg, data)
 
     def _get_setting(self, setting):
         if setting.num_bytes == 1:
@@ -107,11 +106,6 @@ class Lora:
     def rx_ready(self):
         return IrqFlags.RX_DONE in self.irq_flags
 
-    @property
-    def tx_done(self):
-        return IrqFlags.TX_DONE in self.irq_flags
-    
-    
     def read_rx(self):
         rx_addr = self.read_reg(regs.FIFO_RX_CURRENT_ADDR)
         self.fifo_addr_ptr = rx_addr
@@ -137,24 +131,22 @@ class Lora:
         if not data:
             return
 
-        current_mode = self.mode
+        mode_before = self.mode
         self.mode = 'STDBY'
 
         self.fifo_addr_ptr = 0
-        self.write_data(regs.FIFO, data)
+        self.write_reg(regs.FIFO, data)
         self.write_reg(regs.PAYLOAD_LENGTH, len(data))
-
         self.mode = 'TX'
 
         while True:
-            if self.tx_done:
+            if IrqFlags.TX_DONE in self.irq_flags:
                 self.clear_irqs(IrqFlags.TX_DONE)
                 break
             time.sleep(0.01)
 
-        self.mode = current_mode
-        
-            
+        self.mode = mode_before
+
     def __repr__(self):
         lines = []
         for name, cls in settings.options.items():
