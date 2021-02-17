@@ -107,10 +107,14 @@ class Lora:
     def rx_ready(self):
         return IrqFlags.RX_DONE in self.irq_flags
 
+    @property
+    def tx_done(self):
+        return IrqFlags.TX_DONE in self.irq_flags
+    
+    
     def read_rx(self):
         rx_addr = self.read_reg(regs.FIFO_RX_CURRENT_ADDR)
         self.fifo_addr_ptr = rx_addr
-        self.ffadfasdf = 3
         n_bytes = self.read_reg(regs.RX_NB_BYTES)
         payload = self.read_data(regs.FIFO, n_bytes)
         rssi = self.adjust_rssi(self.read_reg(regs.PKT_RSSI_VALUE))
@@ -129,6 +133,28 @@ class Lora:
         if pi.read(pin):
             callback()
 
+    def send(self, data):
+        if not data:
+            return
+
+        current_mode = self.mode
+        self.mode = 'STDBY'
+
+        self.fifo_addr_ptr = 0
+        self.write_data(regs.FIFO, data)
+        self.write_reg(regs.PAYLOAD_LENGTH, len(data))
+
+        self.mode = 'TX'
+
+        while True:
+            if self.tx_done:
+                self.clear_irqs(IrqFlags.TX_DONE)
+                break
+            time.sleep(0.01)
+
+        self.mode = current_mode
+        
+            
     def __repr__(self):
         lines = []
         for name, cls in settings.options.items():
