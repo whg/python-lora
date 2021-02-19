@@ -1,6 +1,6 @@
 from inspect import isclass
 from lora.setting import Setting
-import lora.registers as regs            
+import lora.registers as regs
 
 class LongRangeMode(Setting):
     reg = regs.OP_MODE
@@ -17,7 +17,7 @@ class LowFrequencyModeOn(Setting):
     reg = regs.OP_MODE
     shift = 3
     mask = 0b00001000
-    
+
 class Mode(Setting):
     reg = regs.OP_MODE
     mask = 0b00000111
@@ -37,7 +37,7 @@ class CarrierFrequency(Setting):
     @classmethod
     def reverse_transform(cls, v):
         return int(v * int(32e6) / 2**19)
-    
+
 class PaSelect(Setting):
     reg = regs.PA_CONFIG
     shift = 7
@@ -89,14 +89,22 @@ class LnaBoostLf(Setting):
     reg = regs.LNA
     shift = 3
     mask = 0b00001100
-    
+
 class LnaBoostHf(Setting):
     reg = regs.LNA
     mask = 0b00000011
 
+    @classmethod
+    def forward_transform(cls, v):
+        return 3 if v else 0
+
+    @classmethod
+    def reverse_transform(cls, v):
+        return v == 3
+
 class FifoAddrPtr(Setting):
     reg = regs.FIFO_ADDR_PTR
-    
+
 class FifoTxBaseAddr(Setting):
     reg = regs.FIFO_TX_BASE_ADDR
 
@@ -110,8 +118,8 @@ class Bandwidth(Setting):
     options = [
         '7.8kHz', '10.4kHz', '15.6kHz', '20.8kHz', '31.25kHz',
         '41.7kHz', '62.5kHz', '125kHz', '250kHz', '500kHz'
-    ]    
-    
+    ]
+
 class CodingRate(Setting):
     reg = regs.MODEM_CONFIG_1
     shift = 1
@@ -119,11 +127,11 @@ class CodingRate(Setting):
     options = [
         None, '4/5', '4/6', '4/7', '4/8'
     ]
-        
+
 class ImplicitHeaderModeOn(Setting):
     reg = regs.MODEM_CONFIG_1
     mask = 0b00000001
-    
+
 class SpreadingFactor(Setting):
     reg = regs.MODEM_CONFIG_2
     shift = 4
@@ -133,7 +141,7 @@ class TxContinousMode(Setting):
     reg = regs.MODEM_CONFIG_2
     shift = 3
     mask = 0b00001000
-    
+
 class RxPayloadCrcOn(Setting):
     reg = regs.MODEM_CONFIG_2
     shift = 2
@@ -155,7 +163,7 @@ class LowDataRateOptimize(Setting):
     reg = regs.MODEM_CONFIG_3
     shift = 3
     mask = 0b00001000
-    
+
 class PreambleLength(Setting):
     reg = regs.PREAMBLE_MSB
     num_bytes = 2
@@ -164,14 +172,14 @@ class AgcAutoOn(Setting):
     reg = regs.MODEM_CONFIG_3
     shift = 2
     mask = 0b00000100
-    
+
 class DetectionOptimize(Setting):
     reg = regs.DETECT_OPTIMIZE
     mask = 0b00000111
 
 class DetectionThreshold(Setting):
     reg = regs.DETECTION_THRESHOLD
-    
+
 
 options = {
     cls.id(): cls
