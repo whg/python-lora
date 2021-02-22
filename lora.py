@@ -1,8 +1,10 @@
 import time
+import atexit
 from enum import IntFlag
-from lora.hardware import pi, pigpio, SPI
-from lora import registers as regs
-from lora import settings
+from spidev import SpiDev
+import RPi.GPIO as gpio
+from . import registers as regs
+from . import settings
 
 class IrqFlags(IntFlag):
     CAD_DETECTED = 1
@@ -18,11 +20,16 @@ WRITE_BIT = 0x80
 
 class Lora:
     def __init__(self, reset_pin, spi_channel=0):
+        gpio.setmode(gpio.BCM)
+        gpio.setup(reset_pin, gpio.OUT)
         self.reset_pin = reset_pin
-        pi.set_mode(self.reset_pin, pigpio.OUTPUT)
 
         self.reset()
-        self.spi = SPI(spi_channel)
+        self.spi = SpiDev()
+        self.spi.open(0, spi_channel)
+        self.spi.max_speed_hz = 1000000
+
+        atexit.register(self.cleanup)
 
         self.settings_cache = {}
         self.mode = 'SLEEP'
@@ -32,18 +39,25 @@ class Lora:
         self.mode = 'STDBY'
         self.clear_irqs()
 
+    def cleanup(self):
+        gpio.cleanup()
+        self.spi.close()
+
     def connected(self):
         return self.long_range_mode == 'LoRa'
 
     def reset(self):
-        for l in range(2):
-            pi.write(self.reset_pin, l)
-            time.sleep(0.001)
+        gpio.output(self.reset_pin, 0)
+        time.sleep(0.001)
+        gpio.output(self.reset_pin, 1)
+        time.sleep(0.005)
 
     def xfer(self, reg, data=[0]):
         if type(data) is not list:
             data = [data]
-        return self.spi.xfer([reg] + data)
+        output = self.spi.xfer([reg] + data)
+        time.sleep(0.001)
+        return output
 
     def read_reg(self, reg):
         return self.xfer(reg)[1]
@@ -120,11 +134,11 @@ class Lora:
             data, rssi = self.read_rx()
             func(data, rssi)
 
-        pi.set_mode(pin, pigpio.INPUT)
-        pi.callback(pin, pigpio.RISING_EDGE, callback)
+        gpio.setup(pin, gpio.IN)
+        gpio.add_event_detect(pin, gpio.RISING, callback=callback)
 
         # if we're ready now, go for it!
-        if pi.read(pin):
+        if gpio.input(pin):
             callback()
 
     def send(self, data):
@@ -152,29 +166,3 @@ class Lora:
         for name, cls in settings.options.items():
             lines.append(f'{cls.__name__}: {getattr(self, name)}')
         return '\n'.join(lines)
-
-
-if __name__ == '__main__':
-    lora = Lora(reset_pin=22)
-    lora.header_mode = 'explicit'
-    lora.error_coding_rate = '4/8'
-    lora.bandwidth = '125kHz'
-    lora.spreading_factor = 7
-    lora.enable_crc = False
-    lora.sync_word = 0x12
-    lora.preamble_length = 6
-    lora.detection_optimize = 0x03 # 0x05 for SF6, 0x03 otherwise
-    lora.detection_threshold = 0x0a # 0x0c for SF6, 0x0a otherwise
-    lora.carrier_frequency = 434e6
-    lora.lna_boost_hf = False
-    lora.lna_gain = 'G1' # highest gain
-    lora.ocp_on = True
-    lora.ocp_trim = 200
-    lora.mode = 'RXCONTINOUS'
-
-    def c(data, rssi):
-        print(data, rssi)
-
-    lora.on_rx(4, c)
-    input()
-    # print(lora.rx_ready, lora.read_rx())
